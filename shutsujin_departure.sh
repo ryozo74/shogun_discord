@@ -688,7 +688,9 @@ if [ "$SETUP_ONLY" = false ]; then
     fi
     # --shogun-no-thinking → settings.yaml の thinking を一時的に false にして build_cli_command に任せる
     if [ "$SHOGUN_NO_THINKING" = true ] && [ "$CLI_ADAPTER_LOADED" = true ]; then
-        "$CLI_ADAPTER_PROJECT_ROOT/.venv/bin/python3" -c "
+        _PY3="$CLI_ADAPTER_PROJECT_ROOT/.venv/bin/python3"
+        [ -x "$_PY3" ] || _PY3="$(command -v python3 || echo python3)"
+        "$_PY3" -c "
 import yaml
 f = '${CLI_ADAPTER_SETTINGS}'
 with open(f) as fh: d = yaml.safe_load(fh) or {}

@@ -30,14 +30,17 @@ if [ "${DISCORD_MULTI_SHOGUN:-false}" = "true" ]; then
   if [ -n "$DISCORD_BOT_USER_ID" ]; then
     BOT_USER_ID="$DISCORD_BOT_USER_ID"
   else
-    BOT_USER_ID=$(python3 -c "
-import os, urllib.request, json
-token = os.environ['DISCORD_BOT_TOKEN']
-req = urllib.request.Request('https://discord.com/api/v10/users/@me',
-  headers={'Authorization': f'Bot {token}'})
-resp = urllib.request.urlopen(req)
-print(json.loads(resp.read())['id'])
-" 2>/dev/null)
+    # Resolve via curl (Discord/Cloudflare 403s the default Python-urllib
+    # User-Agent; curl sends an accepted UA and is already a hard dep here).
+    BOT_USER_ID=$(curl -s \
+      -H "Authorization: Bot ${TOKEN}" \
+      -H "Content-Type: application/json" \
+      "https://discord.com/api/v10/users/@me" \
+      | python3 -c "import sys, json
+try:
+    print(json.load(sys.stdin).get('id', ''))
+except Exception:
+    pass" 2>/dev/null)
     if [ -z "$BOT_USER_ID" ]; then
       echo "ERROR: Cannot resolve bot user id. Set DISCORD_BOT_USER_ID or fix token." >&2
       exit 1
@@ -95,8 +98,19 @@ for msg in reversed(data):  # reversed: oldest first
     msg_id = msg.get("id", "")
     ts = msg.get("timestamp", "")
     content = msg.get("content", "").strip()
+    out = {'id': msg_id, 'ts': ts, 'content': content}
+    # Cross-shogun review: if the Lord replied to another shogun's
+    # message, carry the referenced message so "@shogunN これどう思う？"
+    # has the referent. Discord inlines `referenced_message` on the
+    # messages list endpoint for replies; if absent we degrade quietly.
+    ref = msg.get("referenced_message")
+    if isinstance(ref, dict):
+        ref_author = (ref.get("author") or {}).get("username", "")
+        ref_content = (ref.get("content") or "").strip()
+        if ref_author or ref_content:
+            out['reply_to'] = {'author': ref_author, 'content': ref_content}
     if content:
-        print(json.dumps({'id': msg_id, 'ts': ts, 'content': content}))
+        print(json.dumps(out))
 PY
 }
 
@@ -104,6 +118,7 @@ append_discord_inbox() {
     local msg_id="$1"
     local ts="$2"
     local msg="$3"
+    local reply_to_json="${4:-}"
 
     (
         if command -v flock &>/dev/null; then
@@ -117,8 +132,9 @@ append_discord_inbox() {
         MSG_ID="$msg_id" \
         MSG_TS="$ts" \
         MSG_TEXT="$msg" \
+        REPLY_TO_JSON="$reply_to_json" \
         python3 - << 'PY'
-import os, sys, yaml, tempfile
+import os, sys, json, yaml, tempfile
 
 path = os.environ["DISCORD_INBOX_PATH"]
 entry = {
@@ -127,6 +143,14 @@ entry = {
     "message": os.environ.get("MSG_TEXT", ""),
     "status": "pending",
 }
+_rt = os.environ.get("REPLY_TO_JSON", "")
+if _rt:
+    try:
+        _rtobj = json.loads(_rt)
+        if isinstance(_rtobj, dict) and (_rtobj.get("content") or _rtobj.get("author")):
+            entry["reply_to"] = _rtobj
+    except Exception:
+        pass
 
 data = {}
 if os.path.exists(path):
@@ -193,10 +217,11 @@ while true; do
             msg_id=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['id'])" "$json_line")
             ts=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['ts'])" "$json_line")
             content=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['content'])" "$json_line")
+            reply_to=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(json.dumps(d['reply_to']) if d.get('reply_to') else '')" "$json_line")
             [ -z "$msg_id" ] && continue
             echo "[$(date)] Received from Lord: ${content:0:50}" >&2
 
-            if ! append_discord_inbox "$msg_id" "$ts" "$content"; then
+            if ! append_discord_inbox "$msg_id" "$ts" "$content" "$reply_to"; then
                 echo "[$(date)] WARNING: failed to write discord_inbox" >&2
                 continue
             fi

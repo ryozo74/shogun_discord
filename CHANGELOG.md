@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Cross-shogun review: when the Lord replies to another shogun's Discord
+  message while mentioning a shogun, the referenced message is carried into
+  `queue/discord_inbox.yaml` as a `reply_to` (author + content) so
+  "@shogunN これどう思う？" has its referent. Backward compatible — non-reply
+  messages are unchanged. (`scripts/discord_listener.sh`,
+  `tests/test_discord_routing.sh`, `docs/discord_setup.md`)
+
+### Fixed
+- `scripts/discord_listener.sh`: bot-user-id auto-detection used Python
+  `urllib` without a User-Agent, which Discord/Cloudflare answered with
+  HTTP 403; now uses `curl` (already a dependency) so multi-shogun mode
+  no longer requires manually setting `DISCORD_BOT_USER_ID`.
+- `scripts/inbox_write.sh` and `shutsujin_departure.sh`: hardcoded
+  `.venv/bin/python3` now falls back to system `python3` when the venv
+  is absent (fresh checkout before `first_setup.sh`).
+
 ## [4.6.0] - 2026-04-19
 
 ### Added

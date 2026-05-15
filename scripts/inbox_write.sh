@@ -6,6 +6,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Prefer the project venv python, fall back to system python3 when the
+# venv has not been created (e.g. fresh checkout before first_setup.sh).
+PY3="$SCRIPT_DIR/.venv/bin/python3"
+[ -x "$PY3" ] || PY3="$(command -v python3 || echo python3)"
+
 TARGET="$1"
 CONTENT="$2"
 TYPE="$3"
@@ -69,7 +75,7 @@ max_attempts=3
 
 while [ $attempt -lt $max_attempts ]; do
     if _acquire_lock; then
-        "$SCRIPT_DIR/.venv/bin/python3" -c "
+        "$PY3" -c "
 import yaml, sys
 
 try:
