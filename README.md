@@ -955,6 +955,22 @@ multi-agent-shogun supports two-way Discord communication (cmd_417/429/438).
 
 See [`docs/discord_setup.md`](docs/discord_setup.md) for full setup, channel config, and troubleshooting.
 
+### Multi-Shogun Collaborative Mode
+
+Run multiple shogun Bots in the same Discord channel for parallel collaboration.
+
+```env
+DISCORD_MULTI_SHOGUN=true  # Enable routing mode
+```
+
+- `@BotName` mention → that shogun only
+- `@everyone` → all shoguns
+- Unaddressed messages → ignored (safe, no duplicate execution)
+
+**Requirement**: Each shogun must use a separate Discord Bot application (separate token, separate `queue/` directory).
+
+See [`docs/discord_setup.md`](docs/discord_setup.md) for full setup.
+
 ### 🖼️ 10. Pane Border Task Display
 
 Each tmux pane shows the agent's current task directly on its border:

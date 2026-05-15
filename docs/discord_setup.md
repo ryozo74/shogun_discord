@@ -157,3 +157,51 @@ dashboard.md は2000文字を超える可能性があるため、以下の方針
 | 403 Forbidden | Bot がチャネルに参加していない | Bot をサーバ招待してチャネルの閲覧権限を付与 |
 | 401 Unauthorized | TOKEN が間違い or 失効 | Developer Portal でトークンをリセット |
 | Message Content Intent | Bot がメッセージ本文を読めない | Developer Portal で MESSAGE CONTENT INTENT を有効化 |
+
+## 協働運用（Multi-Shogun）
+
+複数の将軍 Bot を同一の Discord コマンドチャンネルで協働させる機能です。
+
+### 動作モード
+
+| `DISCORD_MULTI_SHOGUN` | 動作 |
+|------------------------|------|
+| 未設定 / `false`（デフォルト） | 従来動作：殿の全発言を処理 |
+| `true` | ルーティングモード：@メンション対象のみ処理 |
+
+### メンション方式
+
+- **特定将軍への指示**: `@将軍のBot名` でメンション → その将軍のみ実行
+- **全将軍への指示**: `@everyone` → 全将軍が実行
+- **無印（メンションなし）**: ルーティングモード時は無視。将軍の stderr に1回ログ出力。
+  `@将軍 か @everyone を付与されたし` というメッセージが表示されます。
+
+### 設定手順
+
+1. **将軍ごとに別個の Discord Bot アプリを作成**してください（Bot トークンが別になる）
+   - Bot が別 id を返すため、殿は返信 Bot 名で将軍甲乙を識別できます
+   - レート制限も独立するため、並列実行に安全です
+
+2. 各将軍の `.env` に以下を追加:
+   ```env
+   DISCORD_MULTI_SHOGUN=true
+   # DISCORD_BOT_USER_ID は自動取得されます。失敗時のみ手動設定してください。
+   # DISCORD_BOT_USER_ID=your_bot_user_id
+   # 任意: @role でも全将軍同時指示を受け付ける場合
+   # DISCORD_SHOGUN_ROLE_ID=your_role_id
+   ```
+
+3. `queue/` ディレクトリは **将軍ごとに独立したリポジトリに配置**してください
+   - 同一 `queue/` の共有は禁止です。共有すると inbox の競合が発生します。
+   - 各将軍は自身の `queue/inbox/{agent}.yaml` のみを監視します。
+
+### 運用上の注意
+
+- **将軍 Bot への返信は明示的な @メンションを推奨**
+  Discord では将軍 Bot の発言に返信すると、allowed_mentions 設定によっては
+  Bot が `mentions` に自動追加される場合があります。意図しない実行を避けるため、
+  殿の発言は常に `@将軍名` や `@everyone` を明示してください。
+
+- `@everyone` は Discord サーバー設定により権限が制限される場合があります。
+  代替として `DISCORD_SHOGUN_ROLE_ID` に将軍ロールの id を設定すると、
+  @ロールメンションでも全将軍同時指示が可能です。

@@ -25,6 +25,27 @@ if [ -z "$TOKEN" ] || [ -z "$CHANNEL_ID" ] || [ -z "$LORD_ID" ]; then
     exit 1
 fi
 
+# Multi-shogun: resolve bot user id
+if [ "${DISCORD_MULTI_SHOGUN:-false}" = "true" ]; then
+  if [ -n "$DISCORD_BOT_USER_ID" ]; then
+    BOT_USER_ID="$DISCORD_BOT_USER_ID"
+  else
+    BOT_USER_ID=$(python3 -c "
+import os, urllib.request, json
+token = os.environ['DISCORD_BOT_TOKEN']
+req = urllib.request.Request('https://discord.com/api/v10/users/@me',
+  headers={'Authorization': f'Bot {token}'})
+resp = urllib.request.urlopen(req)
+print(json.loads(resp.read())['id'])
+" 2>/dev/null)
+    if [ -z "$BOT_USER_ID" ]; then
+      echo "ERROR: Cannot resolve bot user id. Set DISCORD_BOT_USER_ID or fix token." >&2
+      exit 1
+    fi
+  fi
+  export DISCORD_BOT_USER_ID="$BOT_USER_ID"
+fi
+
 # Initialize inbox if not exists
 if [ ! -f "$INBOX" ]; then
     echo "inbox: []" > "$INBOX"
@@ -50,10 +71,27 @@ except Exception:
     sys.exit(0)
 if not isinstance(data, list):
     sys.exit(0)
+_multi = os.environ.get('DISCORD_MULTI_SHOGUN', 'false').lower() == 'true'
+_bot_id = os.environ.get('DISCORD_BOT_USER_ID', '')
+_role_id = os.environ.get('DISCORD_SHOGUN_ROLE_ID', '')
 for msg in reversed(data):  # reversed: oldest first
     author = msg.get("author", {})
     if author.get("id") != lord_id:
         continue
+    # 第2関門: 宛先ルーティング（multi モードのみ）
+    if _multi:
+        _me = msg.get('mention_everyone', False)
+        _mentions = [m['id'] for m in msg.get('mentions', [])]
+        _mroles = [r['id'] if isinstance(r, dict) else r
+                   for r in msg.get('mention_roles', [])]
+        _addressed = (
+            _me or
+            (_bot_id and _bot_id in _mentions) or
+            (_role_id and _role_id in _mroles)
+        )
+        if not _addressed:
+            print(f"SKIP:{msg['id']}")
+            continue
     msg_id = msg.get("id", "")
     ts = msg.get("timestamp", "")
     content = msg.get("content", "").strip()
@@ -120,6 +158,7 @@ PY
 
 echo "[$(date)] discord_listener started — channel: ${CHANNEL_ID} — lord: ${LORD_ID}" >&2
 
+LAST_WARNED_SKIP_ID=""
 while true; do
     # Build URL with after parameter
     URL="https://discord.com/api/v10/channels/${CHANNEL_ID}/messages?limit=100"
@@ -143,6 +182,14 @@ while true; do
         # Process messages (filtered by LORD_ID)
         while IFS= read -r json_line; do
             [ -z "$json_line" ] && continue
+            if [[ "$json_line" == SKIP:* ]]; then
+              _skip_id="${json_line#SKIP:}"
+              if [ "$_skip_id" != "$LAST_WARNED_SKIP_ID" ]; then
+                echo "[listener] 宛先未指定のため無処理 (id=$_skip_id)。@将軍 か @everyone を付与されたし。" >&2
+                LAST_WARNED_SKIP_ID="$_skip_id"
+              fi
+              continue
+            fi
             msg_id=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['id'])" "$json_line")
             ts=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['ts'])" "$json_line")
             content=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['content'])" "$json_line")

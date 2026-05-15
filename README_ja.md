@@ -900,6 +900,22 @@ multi-agent-shogun は Discord 双方向通信に対応しています（cmd_417
 
 詳細は [`docs/discord_setup.md`](docs/discord_setup.md) を参照。
 
+### 複数将軍の協働運用（Multi-Shogun）
+
+複数の将軍 Bot を同一 Discord チャンネルで並列稼働させる協働モードです。
+
+```env
+DISCORD_MULTI_SHOGUN=true  # ルーティングモード有効化
+```
+
+- `@Bot名` でメンション → その将軍のみ実行
+- `@everyone` → 全将軍実行
+- メンションなし → 無視（誤多重実行を防止）
+
+**必須**: 将軍ごとに別個の Discord Bot アプリ（別トークン・別 `queue/`）が必要です。
+
+詳細は [`docs/discord_setup.md`](docs/discord_setup.md) を参照。
+
 ### 🖼️ 10. ペインボーダータスク表示
 
 各tmuxペインのボーダーにエージェントの現在のタスクを表示：
