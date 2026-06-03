@@ -32,7 +32,7 @@ start_watcher_if_missing() {
         return 0
     fi
 
-    if pgrep -f "scripts/inbox_watcher.sh ${agent} " >/dev/null 2>&1; then
+    if pgrep -f "bash scripts/inbox_watcher.sh ${agent} " >/dev/null 2>&1; then
         return 0
     fi
 

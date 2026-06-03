@@ -188,9 +188,12 @@ Race condition is eliminated: `/clear` wipes old context. Agent re-reads YAML wi
 |-----------|--------|--------|
 | Ashigaru → Gunshi | Report YAML + inbox_write | Quality check & dashboard aggregation |
 | Gunshi → Karo | Report YAML + inbox_write | Quality check result + strategic reports |
+| Gunshi → Shogun | inbox_write type:review_request (QC PASS時のみ) | **cmd_450恒久策**: 将軍検品代行の自動wakeトリガ。`bash scripts/inbox_write.sh shogun "<subtask_id> 検品要請" review_request gunshi` を1通のみ送る |
 | Karo → Shogun/Lord | dashboard.md update only | **inbox to shogun FORBIDDEN** — prevents interrupting Lord's input |
 | Karo → Gunshi | YAML + inbox_write | Strategic task or quality check delegation |
 | Top → Down | YAML + inbox_write | Standard wake-up |
+| 並列 Ashigaru QC | Gunshi が unit ごとに個別実施 | **集約 QC 禁止** — 全 unit 個別 PASS まで Karo への merge dispatch 開けず |
+| task_done.sh 保証 | `bash scripts/task_done.sh` 1コマンド | **機械保証**: YAML status 更新+karo inbox 自動。手動 2 操作禁止 |
 
 ## File Operation Rule
 

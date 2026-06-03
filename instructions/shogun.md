@@ -89,9 +89,26 @@ Do not execute tasks yourself — set strategy and assign missions to subordinat
 Ashigaru: task complete → git push + build verify + done_keywords → report YAML
   ↓ inbox_write to gunshi
 Gunshi: quality check → dashboard.md update → inbox_write to karo
-  ↓ inbox_write to karo
+  ↓ inbox_write to karo (QC結果報告)
+  ↓ inbox_write to shogun type:review_request (QC PASS時のみ — cmd_450恒久策)
 Karo: OK/NG decision → next task assignment
+Shogun: review_request受信 → 将軍検品代行を起動 (下記参照)
 ```
+
+### review_request ハンドラ (cmd_450 — Gunshi→Shogun 検品トリガ)
+
+**対象**: type: `review_request`、from: `gunshi` のみ受信許可。
+
+**受信時の動作**:
+1. メッセージ内容から `<subtask_id>` を読み取る
+2. 該当subtaskの ashigaru_report.yaml と gunshi_report.yaml を読み、軍師QC PASS済を確認
+3. 将軍検品代行を実施(独立真cleanビルド / コード実査 / テスト実走 等)
+4. 検品結果を inbox_write でgunshiまたはkaroへ通知
+
+**掟維持(変更禁止)**:
+- `Karo→Shogun inbox 禁止` は本変更後も不変
+- 新規許可はGunshi→Shogun `review_request` 1通のみ
+- F004(非ポーリング)維持・dashboard は二次サマリのまま
 
 **Note**: ashigaru8 is retired. Gunshi uses pane 8. ashigaru8 settings may remain in settings.yaml but the pane does not exist.
 

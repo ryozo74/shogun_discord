@@ -58,13 +58,22 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 # JSON field extractor (python3)
-# Reads API response from $DISCORD_API_RESPONSE env var to avoid stdin/heredoc conflict.
+# Writes API response to tmpfile to avoid ARG_MAX limit with large JSON payloads.
 parse_messages() {
-    DISCORD_API_RESPONSE="$1" python3 - "$LORD_ID" <<'PY'
+    local _pm_tmpfile
+    _pm_tmpfile=$(mktemp /tmp/discord_response_XXXXXX.json)
+    printf '%s' "$1" > "$_pm_tmpfile"
+    DISCORD_API_RESPONSE_FILE="$_pm_tmpfile" python3 - "$LORD_ID" <<'PY'
 import os, sys, json
 
 lord_id = sys.argv[1]
-raw = os.environ.get("DISCORD_API_RESPONSE", "")
+path = os.environ.get("DISCORD_API_RESPONSE_FILE", "")
+try:
+    with open(path) as _f:
+        raw = _f.read()
+    os.unlink(path)
+except Exception:
+    sys.exit(0)
 try:
     data = json.loads(raw)
 except Exception:
@@ -156,6 +165,70 @@ PY
     ) 200>"$LOCKFILE"
 }
 
+append_discord_inbox_error() {
+    local msg_id="$1"
+    local ts="$2"
+    local content="$3"
+    local reason="$4"
+    local error_at
+    error_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    (
+        if command -v flock &>/dev/null; then
+            flock -w 5 200 || return 1
+        else
+            _ld="${LOCKFILE}.d"; _i=0
+            while ! mkdir "$_ld" 2>/dev/null; do sleep 0.1; _i=$((_i+1)); [ $_i -ge 50 ] && return 1; done
+            trap "rmdir '$_ld' 2>/dev/null" EXIT
+        fi
+        DISCORD_INBOX_PATH="$INBOX" \
+        MSG_ID="$msg_id" \
+        MSG_TS="$ts" \
+        MSG_TEXT="$content" \
+        ERR_TYPE="$reason" \
+        ERR_AT="$error_at" \
+        python3 - << 'PY'
+import os, yaml, tempfile
+
+path = os.environ["DISCORD_INBOX_PATH"]
+entry = {
+    "id": os.environ.get("MSG_ID", ""),
+    "timestamp": os.environ.get("MSG_TS", ""),
+    "message": os.environ.get("MSG_TEXT", ""),
+    "status": "error",
+    "error_type": os.environ.get("ERR_TYPE", "write_failed"),
+    "error_at": os.environ.get("ERR_AT", ""),
+}
+
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            loaded = yaml.safe_load(f)
+        if isinstance(loaded, dict):
+            data = loaded
+    except Exception:
+        data = {}
+
+items = data.get("inbox")
+if not isinstance(items, list):
+    items = []
+items.append(entry)
+data["inbox"] = items
+
+tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+try:
+    with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    os.replace(tmp_path, path)
+except Exception as e:
+    import sys
+    print(f"[discord_listener] error-entry write failed: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+    ) 200>"$LOCKFILE"
+}
+
 echo "[$(date)] discord_listener started — channel: ${CHANNEL_ID} — lord: ${LORD_ID}" >&2
 
 LAST_WARNED_SKIP_ID=""
@@ -179,6 +252,9 @@ while true; do
 
     # Check for API errors
     if echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if isinstance(d,list) else 1)" 2>/dev/null; then
+        # cmd_451: silent loss対策 — cycle単位の追跡変数初期化
+        SKIP_ADVANCE_ID=""
+        HAD_FAILURE=false
         # Process messages (filtered by LORD_ID)
         while IFS= read -r json_line; do
             [ -z "$json_line" ] && continue
@@ -188,6 +264,8 @@ while true; do
                 echo "[listener] 宛先未指定のため無処理 (id=$_skip_id)。@将軍 か @everyone を付与されたし。" >&2
                 LAST_WARNED_SKIP_ID="$_skip_id"
               fi
+              # cmd_451: SKIP idは安全に前進可能(後続の失敗がある場合はbreakで上書きされない)
+              SKIP_ADVANCE_ID="$_skip_id"
               continue
             fi
             msg_id=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d['id'])" "$json_line")
@@ -197,8 +275,12 @@ while true; do
             echo "[$(date)] Received from Lord: ${content:0:50}" >&2
 
             if ! append_discord_inbox "$msg_id" "$ts" "$content"; then
-                echo "[$(date)] WARNING: failed to write discord_inbox" >&2
-                continue
+                echo "[$(date)] WARNING: failed to write discord_inbox for $msg_id — state NOT advanced" >&2
+                # cmd_451: (a)state非前進(breakでcycleを中断) (b)error可視化
+                HAD_FAILURE=true
+                append_discord_inbox_error "$msg_id" "$ts" "$content" "write_failed" || \
+                    echo "[$(date)] WARNING: error-entry write also failed for $msg_id" >&2
+                break
             fi
 
             # Update last_msg_id
@@ -211,15 +293,9 @@ while true; do
                 discord_received discord_listener
         done < <(parse_messages "$RESPONSE")
 
-        # Update LAST_MSG_ID even if no messages matched (to skip bot/other messages)
-        LATEST_ID=$(echo "$RESPONSE" | python3 -c "
-import sys,json
-msgs = json.load(sys.stdin)
-if isinstance(msgs, list) and msgs:
-    print(msgs[0]['id'])  # Discord returns newest first
-" 2>/dev/null)
-        if [ -n "$LATEST_ID" ] && { [ -z "$LAST_MSG_ID" ] || [ "$LATEST_ID" \> "$LAST_MSG_ID" ]; }; then
-            LAST_MSG_ID="$LATEST_ID"
+        # cmd_451: 失敗したLordメッセージより前のSKIPのみ前進(LATEST_ID一括前進は廃止)
+        if [ -n "$SKIP_ADVANCE_ID" ] && { [ -z "$LAST_MSG_ID" ] || [ "$SKIP_ADVANCE_ID" \> "$LAST_MSG_ID" ]; }; then
+            LAST_MSG_ID="$SKIP_ADVANCE_ID"
             echo "$LAST_MSG_ID" > "$STATE_FILE"
         fi
     else

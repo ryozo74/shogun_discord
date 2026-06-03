@@ -74,6 +74,24 @@ workflow:
     target: queue/inbox/gunshi.yaml
     mandatory: true
     note: "Check for unread messages BEFORE going idle."
+  - step: 7.6
+    action: parallel_qc_completeness_check
+    mandatory: true
+    note: |
+      【並列 unit 個別 QC 義務】
+      複数 ashigaru unit を並列 dispatch した cmd では、全 unit の QC を
+      個別に完了させるまで idle 禁止・step 8 進行禁止。
+      - 各 ashigaru report を unit ごとに独立 QC せよ (集約・まとめ QC 禁止)
+      - QC 完了状況を queue/reports/ashigaru*_report.yaml で逐次 Read 確認
+      - 未 QC unit がある場合、その unit の QC を完了してから次へ進め
+      再発防止のため本ルールは無条件適用。単一 unit dispatch 時も Read 確認を推奨。
+  - step: 7.65
+    action: task_done_sh_verification
+    mandatory: true
+    note: |
+      足軽報告着信時、queue/tasks/ashigaru*.yaml の対象 task の status:done を
+      Read で確認(task_done.sh 機械保証ループ完結確認)。
+      status が 'done' 未確定なら足軽へ task_done.sh 再実行を催促せよ。
   - step: 8
     action: echo_shout
     condition: "DISPLAY_MODE=shout"
@@ -261,6 +279,13 @@ When ashigaru completes work, gunshi receives report via inbox and performs qual
 - Gunshi performs quality review (tests pass? build OK? scope met?)
 - Gunshi updates dashboard.md with results
 - Gunshi reports to Karo: "Quality check PASS" or "Quality check FAIL + concerns"
+- **QC PASS時のみ(cmd_450 恒久策)**: 下記コマンドを1通送り将軍検品代行を自動起動する
+  ```bash
+  bash scripts/inbox_write.sh shogun "<subtask_id> 検品要請" review_request gunshi
+  ```
+  ※ `<subtask_id>` は実際のサブタスクIDに置き換える(例: `subtask_447j_be 検品要請`)
+  ※ QC FAIL時はKaroへ報告のみ・shogunへ送らない
+  ※ Karo→Shogun inbox禁止は不変。本許可はGunshi→Shogun review_request 1通のみ
 - Karo makes final OK/NG decision
 
 **Quality Check Task YAML (written by Karo):**
@@ -435,6 +460,8 @@ Ashigaru completes task → reports to Gunshi (inbox_write)
   → Gunshi performs quality check (tests? build? scope?)
   → Gunshi updates dashboard.md with QC results
   → Gunshi reports to Karo: "QC PASS" or "QC FAIL: X,Y,Z"
+  → [QC PASS時のみ] bash scripts/inbox_write.sh shogun "<subtask_id> 検品要請" review_request gunshi
+     (将軍検品代行の自動wakeトリガ — cmd_450恒久策)
   → Karo makes OK/NG decision and unblocks dependent tasks
 ```
 

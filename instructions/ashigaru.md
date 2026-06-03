@@ -254,7 +254,11 @@ Recover from primary data:
 - Read instructions only if needed for 2nd+ tasks
 
 **Before /clear** (ensure these are done):
-1. If task complete → report YAML written + inbox_write sent
+1. If task complete → `bash scripts/task_done.sh <task_id> ashigaruN [--to-gunshi]` 1コマンドで:
+   (a) queue/tasks/ashigaruN.yaml status:done 自動更新
+   (b) karo へ report_received 自動送信
+   (c) --to-gunshi 指定時は gunshi へも自動送信
+   失敗時は stderr+exit non-zero で通知。手動 inbox_write 単独は禁(冪等性破壊リスク)
 2. If task in progress → save progress to task YAML:
    ```yaml
    progress:
@@ -283,6 +287,41 @@ Act without waiting for Karo's instruction:
 **Anomaly handling:**
 - Context below 30% → write progress to report YAML, tell Gunshi "context running low"
 - Task larger than expected → include split proposal in report
+
+## Test Validation Rules (MANDATORY — cmd_451 規律事案より)
+
+**違反は規律事案として dashboard申し送りに記録される。**
+
+### 1. PASS申告禁止ルール(自走再現)
+
+**自走再現できない証跡をPASS申告することは禁止。**
+
+- テスト手法を実行したとき、手法自体が構造的に成功不可能な場合(ツールの制限・環境の問題)、その結果をPASSと申告してはならない。
+- PASS申告前に「自分が今行ったコマンドで、報告する結果が本当に得られたか」を自己確認せよ。
+- 実証不能な証跡は「未検証」として報告し、代替検証手法を提案せよ。
+
+### 2. heredoc含む関数の抽出禁止パターン
+
+**`sed -n '/^funcname/,/^}/p'` による関数抽出は禁止。**
+
+理由: heredocブロック内にPython dict等の `}` が行頭(列0)に存在する場合、`^}` パターンがheredoc内の `}` にマッチし、関数が途中で切断される。`source`は構造的に失敗するが、エラーメッセージなしで通過することがある。
+
+**正しい代替手法:**
+```bash
+# 行範囲指定(事前にgrep -nで行番号を特定)
+sed -n '159,221p' path/to/script.sh
+
+# awk括弧カウント方式
+awk '/^funcname/{p=1;c=0} p{c+=gsub(/{/,"{")-gsub(/}/,"}"); print; if(c==0 && p>1)exit}' script.sh
+```
+
+### 3. 抽出手法の自己検証義務
+
+bashスクリプトから関数を抽出してsource・テストするタスクにおいて:
+1. 対象関数がheredocを含むか確認する(`grep -n 'PY\|EOF\|HEREDOC' script.sh`)
+2. heredocが存在する場合は行範囲指定またはawk括弧整合を使用する
+3. 抽出後にsource前に行数を確認する(`wc -l <(抽出コマンド)`)
+4. 期待行数と一致しなければ抽出失敗として再検討する
 
 ## Shout Mode (echo_message)
 

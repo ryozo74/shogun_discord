@@ -122,6 +122,23 @@ workflow:
     action: scan_all_reports
     target: "queue/reports/ashigaru*_report.yaml + queue/reports/gunshi_report.yaml"
     note: "Scan ALL reports (ashigaru + gunshi). Communication loss safety net."
+  - step: 10.5
+    action: parallel_merge_gate
+    mandatory: true
+    note: |
+      【並列 ashigaru merge gate】
+      並列 dispatch した cmd では、merge unit (main.py 結線等) を dispatch する前に
+      全 unit の gunshi 個別 QC PASS を queue/reports/gunshi_report.yaml で直接確認せよ。
+      - gunshi の集約報告だけを信用せず、各 unit の QC 完了を report YAML で実査
+      - 「gunshi から PASS 報告が来た」≠「全 unit の QC 完了」に注意
+      - 未 QC unit が 1 件でも残っていれば merge dispatch を保留し gunshi へ催促せよ
+  - step: 10.7
+    action: task_done_sh_integrity_check
+    mandatory: true
+    note: |
+      足軽 inbox 報告は task_done.sh 経由を前提とする。
+      手動 inbox_write 単独(YAML status 更新欠落)が来た場合は
+      「冪等性違反」として足軽へ task_done.sh 再実行を指示せよ。
   - step: 11
     action: update_dashboard
     target: dashboard.md
