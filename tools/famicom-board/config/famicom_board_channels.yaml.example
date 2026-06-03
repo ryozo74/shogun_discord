@@ -1,0 +1,17 @@
+# Discord channel ID 設定 (実ファイル名は famicom_board_channels.yaml で・.gitignore 対象)
+#
+# 取得方法:
+#   1. Discord アプリ → ユーザー設定 → 詳細設定 → 開発者モード ON
+#   2. 各 channel を右クリック → 「IDをコピー」
+#   3. 下記空文字部分に19桁ID を貼付
+#
+# 集中型 (1 bot で3 channel管理):
+#   下記3つ全部記入 → bot は famicom-status 等の役割で 3 channelに招待
+#
+# 分散型 (各陣で個別 bot・本ファイルは陣毎に持つ):
+#   その陣 channel ID のみ記入・他は空文字
+#   起動時 `--fleet 1st` 等で対象陣を限定
+
+1st: ''  # 1st陣 (例: Score専任) channel ID
+2nd: ''  # 2nd陣 (例: Discord窓口) channel ID
+3rd: ''  # 3rd陣 (例: 別プロジェクト) channel ID

@@ -202,3 +202,15 @@ tests/specs/osato_lms_*
 !android/
 !android/**
 .claude/settings.local.json
+
+# tools/famicom-board (multi-fleet Discord status visualizer)
+!tools/
+!tools/famicom-board/
+!tools/famicom-board/README.md
+!tools/famicom-board/requirements.txt
+!tools/famicom-board/scripts/
+!tools/famicom-board/scripts/*.py
+!tools/famicom-board/config/
+!tools/famicom-board/config/*.example
+!tools/famicom-board/docs/
+!tools/famicom-board/docs/*.md
