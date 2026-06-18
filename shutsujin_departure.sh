@@ -359,11 +359,20 @@ fi
 # inbox はLinux FSにシンボリックリンク（WSL2の/mnt/c/ではinotifywaitが動かないため）
 # macOSではfswatch使用のためシンボリックリンク不要
 if [ "$(uname -s)" != "Darwin" ]; then
-    INBOX_LINUX_DIR="$HOME/.local/share/multi-agent-shogun/inbox"
-    if [ ! -L ./queue/inbox ]; then
-        mkdir -p "$INBOX_LINUX_DIR"
+    # 2nd艦隊専用 inbox 名前空間（1st=.../inbox-main と物理分離し混信を防ぐ）。
+    # WSL2 では /mnt/* で inotifywait が発火せぬゆえ ext4(native FS) 上に置く。
+    INBOX_LINUX_DIR="$HOME/.local/share/multi-agent-shogun/inbox-2nd"
+    mkdir -p "$INBOX_LINUX_DIR"
+    if [ -L ./queue/inbox ]; then
+        # 既存 symlink が誤ったターゲット（旧共有 inbox 等）を指すなら、在荷を移送してから張替える
+        if [ "$(readlink -f ./queue/inbox)" != "$INBOX_LINUX_DIR" ]; then
+            cp "$(readlink -f ./queue/inbox)"/*.yaml "$INBOX_LINUX_DIR/" 2>/dev/null || true
+            ln -sfn "$INBOX_LINUX_DIR" ./queue/inbox
+            log_info "  └─ inbox symlink を $INBOX_LINUX_DIR へ張替え（混信解消）"
+        fi
+    else
         [ -d ./queue/inbox ] && cp ./queue/inbox/*.yaml "$INBOX_LINUX_DIR/" 2>/dev/null && rm -rf ./queue/inbox
-        ln -sf "$INBOX_LINUX_DIR" ./queue/inbox
+        ln -sfn "$INBOX_LINUX_DIR" ./queue/inbox
         log_info "  └─ inbox → Linux FS ($INBOX_LINUX_DIR) にシンボリックリンク作成"
     fi
 else
@@ -895,15 +904,17 @@ NINJA_EOF
     done
 
     # 既存のwatcherと孤児inotifywait/fswatchをkill
-    pkill -f "inbox_watcher.sh" 2>/dev/null || true
-    pkill -f "inotifywait.*queue/inbox" 2>/dev/null || true
-    pkill -f "fswatch.*queue/inbox" 2>/dev/null || true
+    # ※repoスコープ化(殿/1st将軍 御指示): $SCRIPT_DIR を付さねば pattern が他艦隊(1st等)の
+    #   同名プロセスにも一致し、再出陣で他艦隊の watcher まで巻き込み kill する(混線の元)。
+    pkill -f "$SCRIPT_DIR/scripts/inbox_watcher.sh" 2>/dev/null || true
+    pkill -f "inotifywait.*$SCRIPT_DIR/queue/inbox" 2>/dev/null || true
+    pkill -f "fswatch.*$SCRIPT_DIR/queue/inbox" 2>/dev/null || true
     sleep 1
 
     # 将軍のwatcher（ntfy受信の自動起床に必要）
     # 安全モード: phase2/phase3エスカレーションは無効、timeout周期処理も無効（event-drivenのみ）
     _shogun_watcher_cli=$(tmux show-options -p -t "shogun:main" -v @agent_cli 2>/dev/null || echo "claude")
-    nohup env ASW_DISABLE_ESCALATION=1 ASW_PROCESS_TIMEOUT=0 ASW_DISABLE_NORMAL_NUDGE=0 \
+    nohup env ASW_DISABLE_ESCALATION=1 ASW_DISABLE_NORMAL_NUDGE=0 \
         bash "$SCRIPT_DIR/scripts/inbox_watcher.sh" shogun "shogun:main" "$_shogun_watcher_cli" \
         >> "$SCRIPT_DIR/logs/inbox_watcher_shogun.log" 2>&1 &
     disown

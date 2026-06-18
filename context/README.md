@@ -1,3 +1,10 @@
+---
+role: [PM, Dir, SCR, Chr, DP, Art, SUP]
+domain: [README, vault概要, 使い方]
+type: overview
+tags: [README, overview, vault, index]
+---
+
 # context ディレクトリ
 
 プロジェクト固有のコンテキストを管理するディレクトリ。
@@ -63,3 +70,7 @@ context/
 - 重要な決定があったら即座に更新
 - 日付を必ず更新
 - 不要になった情報は削除（シンプルに保つ）
+
+## 関連(Related)
+- [[_INDEX]] — vault全体のMOC
+- [[production_roles_knowledge_map]] — 役職ナレッジマップ

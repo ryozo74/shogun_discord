@@ -58,13 +58,22 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 # JSON field extractor (python3)
-# Reads API response from $DISCORD_API_RESPONSE env var to avoid stdin/heredoc conflict.
+# Writes API response to tmpfile to avoid ARG_MAX limit with large JSON payloads.
 parse_messages() {
-    DISCORD_API_RESPONSE="$1" python3 - "$LORD_ID" <<'PY'
+    local _pm_tmpfile
+    _pm_tmpfile=$(mktemp /tmp/discord_response_XXXXXX.json)
+    printf '%s' "$1" > "$_pm_tmpfile"
+    DISCORD_API_RESPONSE_FILE="$_pm_tmpfile" python3 - "$LORD_ID" <<'PY'
 import os, sys, json
 
 lord_id = sys.argv[1]
-raw = os.environ.get("DISCORD_API_RESPONSE", "")
+path = os.environ.get("DISCORD_API_RESPONSE_FILE", "")
+try:
+    with open(path) as _f:
+        raw = _f.read()
+    os.unlink(path)
+except Exception:
+    sys.exit(0)
 try:
     data = json.loads(raw)
 except Exception:

@@ -79,6 +79,8 @@
 !scripts/famicom_board_post.py
 # Discord 自動応答 (cmd_417/429 系)
 !scripts/discord_autorespond.sh
+# Fork 経緯・upstream との diff 説明
+!FORK_NOTES.md
 
 # Development tooling
 !Makefile
@@ -140,6 +142,8 @@ logs/
 # Docs
 !docs/
 !docs/philosophy.md
+# Aurora ダッシュボード整理原則 (殿御命 2026-06-18・OSS知識)
+!docs/aurora_dashboard_principles.md
 
 # Screenshots (masked — no secrets)
 !images/

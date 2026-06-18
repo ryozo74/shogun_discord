@@ -701,7 +701,7 @@ agent_has_self_watch() {
             found=0  # found an inotifywait NOT from our process group
             break
         fi
-    done < <(pgrep -f "inotifywait.*inbox/${AGENT_ID}.yaml" 2>/dev/null)
+    done < <(pgrep -f "inotifywait.*$SCRIPT_DIR/queue/inbox/${AGENT_ID}.yaml" 2>/dev/null)
     return $found
 }
 
@@ -1169,7 +1169,7 @@ process_unread_once
 # ─── Main loop: event-driven via inotifywait ───
 # Timeout 30s: WSL2 /mnt/c/ can miss inotify events.
 # Shorter timeout = faster escalation retry for stuck agents.
-INOTIFY_TIMEOUT="${INOTIFY_TIMEOUT:-30}"
+INOTIFY_TIMEOUT="${INOTIFY_TIMEOUT:-12}"  # 30→12: pane実体sweeperの救済間隔短縮(1st実証済をミラー)
 
 while true; do
     # Block until file is modified OR timeout
@@ -1219,6 +1219,30 @@ while true; do
     if [ "$rc" -eq 2 ]; then
         if [ "${ASW_PROCESS_TIMEOUT:-1}" = "1" ]; then
             process_unread "timeout"
+        fi
+        # pane実体 sweeper: idle-flag非依存の wedge 救済 (1st実証済をミラー)
+        # idle-flagが立っていないときでも、paneが実際にidle(esc to無し)なら未読nudgeを送る
+        # 【修正1】ASW_DISABLE_NORMAL_NUDGE gate を撤去: phase2+で=1が既定(L145)のため
+        #   旧版の `!= "1"` 条件だと sweeper が常に skip され機能せず(自己矛盾)。
+        #   sweeper は normal nudge 抑止時にこそ必要ゆえ ASW phase に依らず常時走らせる。shogun のみ除外。
+        if [ "${AGENT_ID:-}" != "shogun" ]; then
+            _sweep_unread=$(get_unread_count_fast 2>/dev/null | "$SCRIPT_DIR/.venv/bin/python3" -c "import sys,json; d=json.load(sys.stdin); print(d.get('count',0))" 2>/dev/null || echo 0)
+            if [ "${_sweep_unread:-0}" -gt 0 ]; then
+                # 【修正2】set -e地雷回避: 裸呼びだと idle(rc=1)で set -e が watcher を即死させる
+                _busy_rc=0
+                agent_is_busy_check "$PANE_TARGET" || _busy_rc=$?
+                if [ "$_busy_rc" -eq 1 ]; then
+                    # pane が idle (esc to 無し) → nudge 送信。
+                    # ※send_wakeup は idle-flag ベースの agent_is_busy() でゲートする。
+                    #   flag が陳腐化(欠落)していると process_unread 経由でも nudge が握り潰される。
+                    #   pane 実体で idle と確認できた今、flag を立て直してゲートを通す(救済の肝)。
+                    touch "${IDLE_FLAG_DIR:-/tmp}/shogun_idle_${AGENT_ID}" 2>/dev/null || true
+                    echo "[$(date)] [SWEEPER] $AGENT_ID: unread=${_sweep_unread}, pane=idle → flag補正+nudge" >&2
+                    process_unread "sweeper"
+                elif [ "$_busy_rc" -eq 0 ]; then
+                    echo "[$(date)] [SWEEPER] $AGENT_ID: unread=${_sweep_unread}, pane=busy → skip (Enter保護)" >&2
+                fi
+            fi
         fi
     else
         process_unread "event"
