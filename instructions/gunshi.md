@@ -105,7 +105,7 @@ files:
 
 panes:
   karo: multiagent:0.0
-  self: "multiagent:0.8"
+  self: "@agent_id で解決せよ（倹約の陣2026-07-30では multiagent:0.4。足軽増減でずれる）"
 
 inbox:
   write_script: "scripts/inbox_write.sh"

@@ -16,6 +16,26 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 艦隊専用 tmux ソケット（殿御下命 2026-07-30 — 艦隊衝突の恒久策）
+# ───────────────────────────────────────────────────────────────────────────────
+# 【問題】1st/2nd/3rd の全艦隊が同じ default ソケット上で同名 session
+#   (shogun / multiagent) を使うため、
+#     (a) 後から出陣した艦隊の kill-session が他艦隊のペインを皆殺しにする
+#     (b) 各艦隊の inbox_watcher が名前(multiagent:agents.N)で send-keys するため
+#         幻の nudge / escalation の /clear が他艦隊のエージェントを叩き、
+#         全文脈再読込を誘発してトークンを焼く（2026-07-30 実測）
+# 【解】艦隊ごとに tmux サーバのソケットを分ける。TMUX_TMPDIR は
+#   ・ここで起動する tmux サーバ
+#   ・この後 nohup で起こす inbox_watcher 群
+#   ・生成されたペイン内のシェル/エージェント（server 環境を継承）
+#   の全てに伝播するため、これ一箇所で艦隊が完全に隔離される。
+#   session 名や pane 指定(multiagent:agents.N)は一切変えずに済む。
+# 【殿の接続】 css/csm alias は下記を使われたし:
+#   TMUX_TMPDIR=/tmp/tmux-fleet-main tmux attach-session -t shogun
+# ═══════════════════════════════════════════════════════════════════════════════
+source "$SCRIPT_DIR/lib/fleet_env.sh"
+
 # 言語設定を読み取り（デフォルト: ja）
 LANG_SETTING="ja"
 if [ -f "./config/settings.yaml" ]; then
@@ -359,7 +379,9 @@ fi
 # inbox はLinux FSにシンボリックリンク（WSL2の/mnt/c/ではinotifywaitが動かないため）
 # macOSではfswatch使用のためシンボリックリンク不要
 if [ "$(uname -s)" != "Darwin" ]; then
-    INBOX_LINUX_DIR="$HOME/.local/share/multi-agent-shogun/inbox"
+    # 艦隊別名前空間: 1st=inbox-main / 2nd=inbox-2nd（2nd repo 側の同行で別名指定）。
+    # 共有 inbox による越境混信(2026-06-15)を防ぐため fleet 専用ディレクトリへ分離。
+    INBOX_LINUX_DIR="$HOME/.local/share/multi-agent-shogun/inbox-main"
     if [ ! -L ./queue/inbox ]; then
         mkdir -p "$INBOX_LINUX_DIR"
         [ -d ./queue/inbox ] && cp ./queue/inbox/*.yaml "$INBOX_LINUX_DIR/" 2>/dev/null && rm -rf ./queue/inbox
@@ -895,15 +917,18 @@ NINJA_EOF
     done
 
     # 既存のwatcherと孤児inotifywait/fswatchをkill
-    pkill -f "inbox_watcher.sh" 2>/dev/null || true
-    pkill -f "inotifywait.*queue/inbox" 2>/dev/null || true
-    pkill -f "fswatch.*queue/inbox" 2>/dev/null || true
+    # 【艦隊別スコープ 2026-06-15】repoパスで限定。広域 pkill は他艦隊(別repo)の watcher を
+    # 巻き添えに皆殺しにする越境事故を起こすため、必ず $SCRIPT_DIR で絞る。
+    pkill -f "$SCRIPT_DIR/scripts/inbox_watcher.sh" 2>/dev/null || true
+    pkill -f "inotifywait.*$SCRIPT_DIR/queue/inbox" 2>/dev/null || true
+    pkill -f "fswatch.*$SCRIPT_DIR/queue/inbox" 2>/dev/null || true
     sleep 1
 
     # 将軍のwatcher（ntfy受信の自動起床に必要）
-    # 安全モード: phase2/phase3エスカレーションは無効、timeout周期処理も無効（event-drivenのみ）
+    # 安全モード: phase2/phase3エスカレーションは無効。timeout周期処理は有効化(2nd由来sweeper整合)。
+    # ※sweeperはshogunを対象外にするため、shogun watcherでtimeout処理が走っても害なし。
     _shogun_watcher_cli=$(tmux show-options -p -t "shogun:main" -v @agent_cli 2>/dev/null || echo "claude")
-    nohup env ASW_DISABLE_ESCALATION=1 ASW_PROCESS_TIMEOUT=0 ASW_DISABLE_NORMAL_NUDGE=0 \
+    nohup env ASW_DISABLE_ESCALATION=1 ASW_DISABLE_NORMAL_NUDGE=0 \
         bash "$SCRIPT_DIR/scripts/inbox_watcher.sh" shogun "shogun:main" "$_shogun_watcher_cli" \
         >> "$SCRIPT_DIR/logs/inbox_watcher_shogun.log" 2>&1 &
     disown
@@ -1067,13 +1092,13 @@ if [ "$SETUP_ONLY" = true ]; then
     echo ""
 fi
 
-echo "  次のステップ:"
+echo "  次のステップ:  ※本艦隊専用ソケット: TMUX_TMPDIR=$TMUX_TMPDIR"
 echo "  ┌──────────────────────────────────────────────────────────┐"
 echo "  │  将軍の本陣にアタッチして命令を開始:                      │"
-echo "  │     tmux attach-session -t shogun   (または: css)        │"
+echo "  │     TMUX_TMPDIR=$TMUX_TMPDIR tmux attach -t shogun"
 echo "  │                                                          │"
 echo "  │  家老・足軽の陣を確認する:                                │"
-echo "  │     tmux attach-session -t multiagent   (または: csm)    │"
+echo "  │     TMUX_TMPDIR=$TMUX_TMPDIR tmux attach -t multiagent"
 echo "  │                                                          │"
 echo "  │  ※ 各エージェントは指示書を読み込み済み。                 │"
 echo "  │    すぐに命令を開始できます。                             │"
@@ -1092,7 +1117,7 @@ if [ "$OPEN_TERMINAL" = true ]; then
 
     # Windows Terminal が利用可能か確認
     if command -v wt.exe &> /dev/null; then
-        wt.exe -w 0 new-tab wsl.exe -e bash -c "tmux attach-session -t shogun" \; new-tab wsl.exe -e bash -c "tmux attach-session -t multiagent"
+        wt.exe -w 0 new-tab wsl.exe -e bash -c "TMUX_TMPDIR=$TMUX_TMPDIR tmux attach-session -t shogun" \; new-tab wsl.exe -e bash -c "TMUX_TMPDIR=$TMUX_TMPDIR tmux attach-session -t multiagent"
         log_success "  └─ ターミナルタブ展開完了"
     else
         log_info "  └─ wt.exe が見つかりません。手動でアタッチしてください。"

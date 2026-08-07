@@ -16,6 +16,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# 艦隊専用 tmux ソケット（素のシェルから叩かれた時に他艦隊を覗かぬため）
+source "$SCRIPT_DIR/lib/fleet_env.sh"
+
 # ─── Defaults ───
 LANG_MODE="ja"
 SESSION_NAME=""
@@ -154,8 +157,17 @@ if [[ -x "$PYTHON" ]]; then
     PYTHON_AVAILABLE=true
 fi
 
-# Agent definitions (from shutsujin_departure.sh)
-AGENTS=("karo" "ashigaru1" "ashigaru2" "ashigaru3" "ashigaru4" "ashigaru5" "ashigaru6" "ashigaru7" "gunshi")
+# Agent definitions — settings.yaml の cli.agents を単一の正とする（出陣スクリプトと同じ編成）
+# 固定7名を決め打つと、倹約の陣(足軽3名)等で不在の足軽まで「待機中」と誤表示するため。
+_AS_IDS=""
+if [ -f "$SCRIPT_DIR/lib/cli_adapter.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/lib/cli_adapter.sh" 2>/dev/null && _AS_IDS=$(get_ashigaru_ids 2>/dev/null)
+fi
+[ -n "$_AS_IDS" ] || _AS_IDS="ashigaru1 ashigaru2 ashigaru3 ashigaru4 ashigaru5 ashigaru6 ashigaru7"
+AGENTS=("karo")
+for _a in $_AS_IDS; do AGENTS+=("$_a"); done
+AGENTS+=("gunshi")
 
 # pane-base-index
 PANE_BASE=$(tmux show-options -gv pane-base-index 2>/dev/null || echo 0)

@@ -54,6 +54,8 @@
 !lib/cli_adapter.sh
 !lib/ntfy_auth.sh
 !lib/agent_status.sh
+# 艦隊隔離: TMUX_TMPDIR の単一の正。scripts/*.sh が source するゆえ必須
+!lib/fleet_env.sh
 
 # Multi-CLI: Codex auto-load file
 !AGENTS.md
@@ -214,3 +216,18 @@ tests/specs/osato_lms_*
 !tools/famicom-board/config/*.example
 !tools/famicom-board/docs/
 !tools/famicom-board/docs/*.md
+
+# 別リポジトリ / 社外秘の作業ツリー — 明示的に締め出す。
+# `!*/` がディレクトリ探索を許すため、埋め込みリポジトリは gitlink として、
+# 外部リポジトリの README 等は白名簿パターン (LICENSE/README.md 等) が
+# 貫通して拾われてしまう。ここで名指しで塞ぐ。
+projects/
+score_be/
+score_fe/
+skills/aurora/
+
+# 絵巻(Emaki)資料 — 内部資料につき commit/push しない (殿御下命 2026-06-16)
+docs/narrative_pipeline.html
+docs/narrative_pipeline_state.json
+docs/emaki_story_sample.md
+docs/assets/emaki_*

@@ -47,6 +47,20 @@ fi
 # ─── Define inbox path early (used in multiple places below) ───
 INBOX="$SCRIPT_DIR/queue/inbox/${AGENT_ID}.yaml"
 
+# ─── Idle flag: define once, touch UNCONDITIONALLY at turn-end ───
+# The watcher (inbox_watcher.sh) decides busy-vs-idle solely from this flag's
+# presence (present = idle). At turn-end the agent IS idle by definition, so we
+# ALWAYS restore the flag here — EARLY and independent of unread count, of the
+# block path, and of stop_hook_active. This is the core fix for the wedge bug:
+# previously the flag was only touched in the stop_hook_active branch (L60) and
+# in the UNREAD==0 branch (L130). When a deferred nudge arrived while busy and
+# the hook fell through to block (stop_hook_active=false, UNREAD>0), the flag was
+# never restored — so if delivery failed the watcher kept seeing "busy" until the
+# slow 5-min safety net. Touching here guarantees recovery even if delivery fails.
+# (Subsequent `touch "$FLAG"` calls below are now redundant but harmless.)
+FLAG="${IDLE_FLAG_DIR:-/tmp}/shogun_idle_${AGENT_ID}"
+touch "$FLAG" 2>/dev/null || true
+
 # ─── Infinite loop prevention ───
 # When stop_hook_active=true, the agent is already continuing from a
 # previous Stop hook block. Allow it to stop this time to prevent loops.

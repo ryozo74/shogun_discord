@@ -7,6 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
+# 艦隊専用 tmux ソケット（他艦隊のペインへ nudge を撃たぬため）
+source "$SCRIPT_DIR/lib/fleet_env.sh"
+
 mkdir -p logs queue/inbox
 
 ensure_inbox_file() {

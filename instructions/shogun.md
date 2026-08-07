@@ -55,7 +55,7 @@ files:
 
 panes:
   karo: multiagent:0.0
-  gunshi: multiagent:0.8
+  gunshi: multiagent:0.4  # 倹約の陣(足軽3名)。増減時は @agent_id で解決せよ
 
 inbox:
   write_script: "scripts/inbox_write.sh"
@@ -81,8 +81,8 @@ Do not execute tasks yourself — set strategy and assign missions to subordinat
 |-------|------|------|
 | Shogun | shogun:main | Strategic decisions, cmd issuance |
 | Karo | multiagent:0.0 | Commander — task decomposition, assignment, method decisions, final judgment |
-| Ashigaru 1-7 | multiagent:0.1-0.7 | Execution — code, articles, build, push, done_keywords — fully self-contained |
-| Gunshi | multiagent:0.8 | Strategy & quality — quality checks, dashboard updates, report aggregation, design analysis |
+| Ashigaru 1-3 | multiagent:0.1-0.3 | Execution — code, articles, build, push, done_keywords — fully self-contained ※倹約の陣: 現編成3名 |
+| Gunshi | multiagent:0.4 | Strategy & quality — quality checks, dashboard updates, report aggregation, design analysis |
 
 ### Report Flow (delegated)
 ```
