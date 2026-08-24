@@ -469,6 +469,12 @@ failover_probe_and_decide(){
   cd "$SCR"
   # 【雲に着座中】ollama宛先が赤なのは当然ゆえ decide は回さず、復席の見張りのみ行う。
   if [ "${CASPER_BACKEND:-ollama}" = "claude_cli" ]; then
+    # ★2026-08-24 是正: 雲に居る間もHOMEへ /api/tags probe を【毎周回】打つ。
+    #   これが無いと emb key を誰も叩かず、fails が積もったまま永久に赤で居座り、
+    #   復席条件(gen緑 ∧ emb非赤)が原理的に満たせなくなる(実害: .139が復電しても
+    #   機構が戻れず、emb:.139 が fails=63/oks=0 のまま固着した)。
+    #   /api/tags は行列を通らぬゆえ安価。生成probe(高価)は cloud_return_check 側で間引く。
+    python3 "$FAILOVER" probe-home >> "$LOG.failover" 2>&1
     cloud_return_check
     return 0
   fi
