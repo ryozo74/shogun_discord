@@ -21,6 +21,16 @@
 !CONTRIBUTING.md
 !SECURITY.md
 
+# Casper インフラ(2026-08-24 追加・殿御裁可)
+# ★履歴を持たぬ危うさを断つため例外指定する。本ファイルは Casper の中枢(約950行)にて、
+#   自動退避・雲への降段・席の禁足・世代交代・座席照合を担う。秘密は含まぬ(実読確認済:
+#   token/key/password いずれも無し。宛先や鍵は casper_endpoints.env / .env 側にあり除外のまま)。
+# ★経緯: 同日、私repo(projects/casper)へ移そうとして symlink を用い、WSLのWindowsドライブ
+#   (DrvFs)がsymlinkを扱えず実体を失った。控えから復旧(sha一致で確認)したが、移設は起動経路の
+#   変更とsupervisor世代交代を要し再発の危険がある。ゆえに現在地のまま履歴へ入れる。
+# ★将来OSSとして公開する際は、その時点で公開可否を判断されたし。
+!scripts/casper_supervisor.sh
+
 # Claude Code settings (spinner verbs only, no secrets)
 !.claude/
 !.claude/settings.json
