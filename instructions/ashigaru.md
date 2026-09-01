@@ -26,6 +26,20 @@ forbidden_actions:
   - id: F005
     action: skip_context_reading
     description: "Start work without reading context"
+  - id: F006
+    action: interactive_prompt_wait
+    description: "Use AskUserQuestion or any interactive prompt that blocks waiting for a human response"
+    reason: |
+      cmd_506 (2026-08-07): 3 ashigaru (1,2,3) each issued AskUserQuestion and blocked
+      waiting for a human answer that never came, since no human monitors ashigaru panes.
+      Total stall: 29 hours. From outside, a blocked pane looks identical to a working one,
+      so the failure went undetected until Shogun manually inspected all three panes.
+      No human is watching an ashigaru pane in real time — a blocking prompt is a permanent stall.
+    instead: |
+      If a judgment call is needed, send it via inbox_write.sh to karo and either
+      (a) move on to other available work, or
+      (b) if you must wait, write to the report YAML that you are blocked pending karo's
+      judgment and why — do NOT sit on an interactive prompt.
 
 workflow:
   - step: 1
@@ -288,6 +302,24 @@ Act without waiting for Karo's instruction:
 - Context below 30% → write progress to report YAML, tell Gunshi "context running low"
 - Task larger than expected → include split proposal in report
 
+## Forbidden: Interactive Prompt Wait (F006 — cmd_506 規律事案より)
+
+**対話型の選択プロンプト(AskUserQuestion等)を一切使うな。判断を仰ぐ形で待機してはならない。**
+
+2026-08-07、足軽1号・2号・3号の3名が同時にAskUserQuestion(対話型プロンプト)を発行し、
+人間の回答を待って永久停止した。誰も足軽paneをリアルタイムで監視しておらぬゆえ、
+返答は永久に来ぬ。外からは「稼働中」に見えるため発見が遅れ、合計29時間を空費した。
+
+**判断を仰ぐ必要が生じたら:**
+```bash
+bash scripts/inbox_write.sh karo "<判断を要する内容>" report_received ashigaru{N}
+```
+その上で:
+1. 他に進められる作業があれば、それに移れ(待機するな)。
+2. 進められる作業が無ければ、報告YAMLに「家老の判断待ちでblocked」と理由を明記して
+   status: blocked とし、次のwakeupを待て。
+3. **対話型プロンプト(AskUserQuestion等)は絶対に使うな。** 応答は誰にも届かぬ。
+
 ## Test Validation Rules (MANDATORY — cmd_451 規律事案より)
 
 **違反は規律事案として dashboard申し送りに記録される。**
@@ -322,6 +354,46 @@ bashスクリプトから関数を抽出してsource・テストするタスク�
 2. heredocが存在する場合は行範囲指定またはawk括弧整合を使用する
 3. 抽出後にsource前に行数を確認する(`wc -l <(抽出コマンド)`)
 4. 期待行数と一致しなければ抽出失敗として再検討する
+
+## Alert/Sensor Wiring Rules (MANDATORY — cmd_518 規律事案より)
+
+**違反は規律事案として dashboard申し送りに記録される。**
+
+2026年8月、「センサーは在るが消費者が無い」病が四度再発した(cmd_512観測装置に呼ぶ者が
+居なかった/cmd_513 Dropbox失敗156件が8日間誰にも気づかれず/cmd_515警報96件が誰にも
+届かず/cmd_518手当5でその病を直す機構自体が同じ病を抱えて生まれた)。個々の不注意では
+なく型(パターン)である——機構を建てる時、作る側だけを見て受け取る側を忘れる癖がある。
+
+### 1. 新規警報/センサー機構の同時実装義務
+
+**新しく警報を吐く機構を作る者は、必ず同じ便で①受け取る側の配線と②届いた証跡を
+示すこと。片方だけなら未完成とする。**
+
+- ①(受け取る側の配線)なき警報発信コードの実装のみをもって完了報告してはならない。
+- ②(届いた証跡)——実際に宛先(inbox/dashboard/discord等の既存経路)まで届いたログ・
+  スクリーンショット・実行結果を報告に含めよ。
+
+### 2. 検収三点セット
+
+**新規警報/センサー機構のACには以下三点を明記し、実証せよ:**
+
+- (a) 合成の赤が実際に宛先まで届くか
+- (b) 古い赤や残骸が初回で誤発火せぬか(cursorは初回のみ末尾寄せとせよ。この欠陥は
+  cmd_515手当3とcmd_518手当5で二度出ている)
+- (c) 本物の新しい赤は依然届くか(★これを欠けば黙らせただけである)
+
+### 3. 届け先の制約
+
+**届け先は増やすな。既存経路へ相乗りせよ。** 新しい通知チャネルを新設する前に、
+既存のinbox/dashboard/discord経路で足りるか検討し、足りる場合はそちらへ相乗りせよ。
+
+### 4. 黒匣synthetic識別(subtask_519_synthetic_marker)
+
+**合成試験でrecord_incident/record_call_timing(projects/casper/scripts/casper_llm_client.py)
+を叩く際は、必ず環境変数 `CASPER_SYNTHETIC=1` を設定すること。** site名へ独自の接頭辞
+(例: "synthetic_test_")を付ける旧慣習は統一規約ではない——足軽間で慣習が揃わず、
+本物の実害と誤判定される事故が起きた(gunshi裁定)。独立欄`synthetic`が機構により
+自動で付されるため、site名の書き方を工夫する必要はない。
 
 ## Shout Mode (echo_message)
 

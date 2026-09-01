@@ -294,9 +294,18 @@ When processing large datasets (30+ items requiring individual web search, API c
 |------------|-----|
 | `rm -rf <dir>` | Only within project tree, after confirming path with `realpath` |
 | `git push --force` | `git push --force-with-lease` |
-| `git reset --hard` | `git stash` then `git reset` |
+| `git reset --hard` | `git stash` then `git reset` — **CONDITIONAL** (see below) |
 | `git clean -f` | `git clean -n` (dry run) first |
 | Bulk file write (>30 files) | Split into batches of 30 |
+
+### git stash is NOT unconditionally safe (2026-08-22 incident)
+
+**Incident**: `projects/casper` is a separate nested git repository (its own `.git`, invisible to `git status` at the repo root). A `git stash`-equivalent operation there silently swept 106 uncommitted files (including a full night's work across multiple cmds) back to an old HEAD. The operator believed they were following this table's safe default; the recommendation itself was the hazard.
+
+**Before running `git stash` (or any command with stash-like semantics) as a "safe" substitute for `git reset --hard`:**
+1. Run `git status --porcelain | wc -l` first. If it reports more than a few dozen changed files, **do not stash** — stash silently and reversibly (from git's perspective) hides a large amount of work behind one opaque ref. Commit the work first (even to a throwaway branch), or stop and ask.
+2. Check whether the target directory is a **separate nested git repository** (its own `.git`) before assuming root-level `git status` reflects its state. A nested repo's uncommitted changes are invisible from the parent tree.
+3. After stashing, do not `pop`/`drop`/`apply` until you've confirmed what was stashed and that recovery (if needed) is complete — treat the stash as the only backup until proven otherwise.
 
 ## WSL2-Specific Protections
 

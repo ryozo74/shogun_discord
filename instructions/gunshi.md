@@ -227,6 +227,49 @@ Karo makes final OK/NG decision and unblocks next tasks
 - Scope creep (ashigaru delivered more/less than requested)
 - Skill candidate found → include in dashboard for Shogun approval
 
+### MANDATORY: PID/md5 Verification for Live-Process QC (cmd_505 恒久策)
+
+**本番プロセスへ実測を行うQC(Casper等の自動リロード対象)では、検証の開始時と終了時に
+対象プロセスのPIDと対象ファイルのmd5を必ず控えて照合すること。**
+
+理由(cmd_496で最初に指摘・cmd_505で再発): 実装者(足軽)と検証者(軍師)が同時に
+`chat_server.py`等へ触れていると、supervisor の auto-reload が検証中にプロセスを
+再起動させ、検証結果の信頼性が損なわれる。過去に「時間帯を分けよ・PIDとmd5を照合せよ」
+という進言が出ていたが、作法として定着していなかったため cmd_505 で再発した。
+
+**手順(検証開始前後に必ず実行):**
+```bash
+# 検証開始時
+pgrep -f "chat_server.py" ; md5sum projects/casper/scripts/chat_server.py
+
+# 検証終了時 — 開始時の値と比較
+pgrep -f "chat_server.py" ; md5sum projects/casper/scripts/chat_server.py
+```
+- PIDが変わっていれば supervisor が再起動している(auto-reload発生の証跡)。
+- md5が変わっていれば別エージェントが本番ファイルへ書き込んでいる。
+- いずれかが変化していた場合、その旨をQC報告に明記し、検証結果への影響有無を
+  切り分けてから判定を下すこと(「壊れておらぬ」と言い切るなら根拠として示せ)。
+- これは推奨でなく必須。偶然できていたことを手順にする——cmd_505で軍師がたまたま
+  実施していたから「壊れておらぬ」と言い切れた、という状態を毎回の作法にすること。
+
+### MANDATORY: 警報/センサー機構QCの三点セット(cmd_518 規律事案より)
+
+2026年8月、「センサーは在るが消費者が無い」病が四度再発した(cmd_512観測装置に呼ぶ者が
+居なかった/cmd_513 Dropbox失敗156件が8日間誰にも気づかれず/cmd_515警報96件が誰にも
+届かず/cmd_518手当5でその病を直す機構自体が同じ病を抱えて生まれた)。門六箇条の
+②(呼ぶ者が居るか)③(赤くなれるか)を検収する際は、以下の三点セットを型として用いよ:
+
+- (a) 合成の赤が実際に宛先まで届くか — ②(呼ぶ者が居るか)の実証
+- (b) 古い赤や残骸が初回で誤発火せぬか(cursorは初回のみ末尾寄せとせよ。この欠陥は
+  cmd_515手当3とcmd_518手当5で二度出ている) — ③(赤くなれるか)の誤発火側の実証
+- (c) 本物の新しい赤は依然届くか(★これを欠けば黙らせただけである) — ③(赤くなれるか)
+  の本来動作側の実証
+
+**新しく警報を吐く機構のQCでは、①受け取る側の配線と②届いた証跡の両方が同じ便で
+揃っているかを確認せよ。片方だけの実装をPASSとしてはならない。届け先が増えている
+場合(新規通知チャネル新設)は、既存経路への相乗りで足りないかを問い、理由なき新設は
+指摘せよ。**
+
 ## Language & Tone
 
 Check `config/settings.yaml` → `language`:

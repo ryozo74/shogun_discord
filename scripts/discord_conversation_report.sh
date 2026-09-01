@@ -66,6 +66,31 @@ if transcript_path and os.path.exists(transcript_path):
 def trunc(s, n):
     return s if len(s) <= n else s[:n] + '…'
 
+# ── 殿御下命 2026-08-21: 「報告があるときのみ投稿でよし」 ──────────────
+# 自律巡回(/loop)中、機械が注入する user ロールのテキスト(skill本文・
+# task-notification・system-reminder 等)を「殿の発言」と誤認して投稿し、
+# Discord が垂れ流しになった。二重の門で塞ぐ。
+#   門1: そのターンを起こしたのが本当に殿か(機械の注入なら投稿せぬ)
+#   門2: 将軍の返しに中身があるか(「巡回を続け申す」級の相槌は投稿せぬ)
+# ★真の報告は将軍が scripts/discord.sh で明示的に送る。本hookは
+#   殿との生のやり取りを控えとして残すためだけのものである。
+_MACHINE_MARKERS = (
+    'SYSTEM NOTIFICATION', 'task-notification', 'system-reminder',
+    'Monitor event', 'local-command-caveat', 'command-name',
+    '— schedule a recurring', 'Launching skill:',
+)
+_probe = user_msg[:2000]
+if not user_msg:
+    sys.exit(0)                      # 門0: 殿の発言が無いターン(自律巡回の
+                                     #      起床・task-notification 等)は
+                                     #      写す会話が無い → 沈黙
+if any(m in _probe for m in _MACHINE_MARKERS) or user_msg.startswith('/'):
+    sys.exit(0)                      # 門1: 殿の発言ではない → 沈黙
+
+MIN_REPORT_CHARS = 200
+if len(assistant_msg) < MIN_REPORT_CHARS:
+    sys.exit(0)                      # 門2: 報告の体を成さぬ → 沈黙
+
 if not user_msg and not assistant_msg:
     sys.exit(0)
 
