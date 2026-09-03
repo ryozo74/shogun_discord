@@ -173,6 +173,27 @@ logs/
 !skills/shogun-screenshot/scripts/*.sh
 !skills/shogun-screenshot/scripts/*.py
 
+# ★casper-dm を加えるにあたっての判断(cmd_524・2026-09-03・軍師裁定):
+#   本リポジトリは PUBLIC(github.com/ryozo74/shogun_discord)である。
+#   ゆえに白名簿へ加える=公開する、と同義。
+#   casper-dm は社内 roster の実名・uid を例示として含んでいたため、
+#   伏せ字化(実名→<社員名>・内部IP→config参照)の上で追加した。
+#   実値は実行時に roster から引くため、伏せ字化で機能は損なわれない。
+#   ★scripts/step0_526_verify.py は意図的に除外している——
+#     社外協力者の実発話ログ(誰がいつ何を尋ねたか)を含み、
+#     伏せ字では構造が消えず、公開判断が軍師の権限を超えるため。
+#     内容自体は queue/reports/ 配下に既に追跡されており履歴は失われない。
+#   機械検問: gate_pack_lint.py が skills/ 配下の git 追跡ファイルに
+#     内部IP・roster実名・.localホスト名が現れたら赤化する。
+!skills/casper-dm/
+!skills/casper-dm/SKILL.md
+!skills/casper-dm/scripts/
+!skills/casper-dm/scripts/resolve.py
+!skills/casper-dm/scripts/send_flow.py
+!skills/casper-dm/scripts/dm_notify_body.py
+!skills/casper-dm/scripts/test_dm_notify_body.py
+# ↑ step0_526_verify.py は列挙しない(=無視されたまま・意図的)
+
 # Python venv (explicit deny — whitelist patterns like LICENSE leak through !*/)
 .venv/
 
