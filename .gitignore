@@ -185,6 +185,10 @@ logs/
 #     内容自体は queue/reports/ 配下に既に追跡されており履歴は失われない。
 #   機械検問: gate_pack_lint.py が skills/ 配下の git 追跡ファイルに
 #     内部IP・roster実名・.localホスト名が現れたら赤化する。
+#     ★守備範囲の限界(⑨-b・2026-09-03是正): roster実名検査はASCII
+#       usernameのみを検める。かな/漢字表記の実名(例:「きよとも」)は
+#       対象外——rosterにかな表記の照合先(単一ソース)が無いため。
+#       「⑨が緑=実名なし」ではなく「⑨が緑=ASCII実名なし」と読め。
 !skills/casper-dm/
 !skills/casper-dm/SKILL.md
 !skills/casper-dm/scripts/

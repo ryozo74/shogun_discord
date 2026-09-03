@@ -251,7 +251,7 @@ def _run_self_check():
     casper_outbox.STORE = tmp_path
     try:
         # AC-誤送信防止(resolve none): 存在せぬ名 → none で停止・proposal は None
-        r_none = propose_dm("きよとも太郎", "test body", actor_id="test_actor_synth")
+        r_none = propose_dm("存在せぬ名太郎", "test body", actor_id="test_actor_synth")
         assert r_none["resolution"]["status"] == "none"
         assert r_none["proposal"] is None
         print("AC-誤送信防止(none) OK:", r_none["resolution"])
