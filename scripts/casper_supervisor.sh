@@ -253,7 +253,10 @@ holdout_lock_active(){
 # それらを直しても chat_server.py が変わらねば再読込されず「直したのに効かぬ」状態が続く
 # (実測2026-07-29: Dropboxのdl=1修正が反映されず、殿の環境で旧挙動のまま出ていた)。
 # ゆえ scripts 直下の *.py 全ての mtime 合算を署名とする(サブディレクトリは対象外=索引等の巨大物を避ける)。
-sig(){ stat -c %Y "$SCR"/*.py 2>/dev/null | awk '{s+=$1} END{print s}'; }
+# 【cmd_520第1便】test_*.py / gate_*.py は本番実行時にimportされない(chat_server.pyの
+# import文を機械確認済・grep -rn "^import |^from " で0件)ため対象から除外。編集のみで
+# auto-reloadが誤発火する事故(cmd_510検品時に三便中三便で再発)を断つ。
+sig(){ find "$SCR" -maxdepth 1 -name '*.py' ! -name 'test_*.py' ! -name 'gate_*.py' -print0 2>/dev/null | xargs -0 stat -c %Y 2>/dev/null | awk '{s+=$1} END{print s}'; }
 
 # 【cmd_518手当2 項目B-6・病A-2の穴】WD_SIG: 番犬(discord_mention_watchdog.py)と
 # casper_handoff.pyの署名(mtime)を、sig()(chat_server系)とは別に監視する。
